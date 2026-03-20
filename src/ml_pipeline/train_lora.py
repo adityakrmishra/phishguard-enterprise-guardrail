@@ -1,22 +1,4 @@
-"""
-src/ml_pipeline/train_lora.py
--------------------------------
-LoRA Fine-Tuning Pipeline – DistilRoBERTa Binary Phishing Classifier
-----------------------------------------------------------------------
-Labels:  0 = SAFE  |  1 = SCAM
-
-Steps:
-  1. Load data/synthetic/red_team_phishing.csv  (scam class)
-  2. Augment with hard-coded safe negative examples
-  3. Tokenise with distilroberta-base tokeniser
-  4. Wrap the base model with a PEFT LoraConfig (sequence classification head)
-  5. Train via HuggingFace Trainer
-  6. Save LoRA adapter weights → models/distilroberta-finetuned/
-  7. Smoke-test: reload adapter and classify two sample sentences
-
-Usage:
-    python -m src.ml_pipeline.train_lora
-"""
+# LoRA fine-tuning pipeline for DistilRoBERTa binary phishing classifier, saving adapter weights to models/distilroberta-finetuned/.
 
 from __future__ import annotations
 
@@ -39,9 +21,6 @@ from transformers import (
     set_seed,
 )
 
-# ---------------------------------------------------------------------------
-# Config
-# ---------------------------------------------------------------------------
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s | %(levelname)-8s | %(message)s",
@@ -55,13 +34,11 @@ SEED         = 42
 MAX_LEN      = 128
 TEST_SIZE    = 0.15
 
-# LoRA hyper-params (kept small for CPU/low-VRAM environments)
 LORA_R           = 8
 LORA_ALPHA       = 16
 LORA_DROPOUT     = 0.1
-LORA_TARGET_MODS = ["query", "value"]   # attention projection layers in RoBERTa
+LORA_TARGET_MODS = ["query", "value"]
 
-# Training hyper-params
 TRAIN_EPOCHS   = 3
 TRAIN_BATCH    = 8
 EVAL_BATCH     = 16
@@ -70,39 +47,31 @@ WEIGHT_DECAY   = 0.01
 
 set_seed(SEED)
 
-# ---------------------------------------------------------------------------
-# Dummy safe (negative) examples – label 0
-# ---------------------------------------------------------------------------
 _SAFE_EXAMPLES: list[str] = [
     "Your account statement for March 2024 is now available online.",
     "Please log in to your banking portal to review your recent transactions.",
-    "Your scheduled payment of ₹5,000 to Rahul Sharma has been processed.",
+    "Your scheduled payment of Rs.5,000 to Rahul Sharma has been processed.",
     "We have updated our privacy policy. Please review the changes at your convenience.",
-    "Your new debit card ending in 4321 has been dispatched and will arrive in 3–5 days.",
-    "Monthly interest of ₹312 has been credited to your savings account.",
-    "Your Fixed Deposit of ₹1,00,000 has been renewed for 12 months at 6.75% p.a.",
-    "Your UPI payment of ₹850 to Swiggy was successful. Ref: 402938471.",
+    "Your new debit card ending in 4321 has been dispatched and will arrive in 3-5 days.",
+    "Monthly interest of Rs.312 has been credited to your savings account.",
+    "Your Fixed Deposit of Rs.1,00,000 has been renewed for 12 months at 6.75% p.a.",
+    "Your UPI payment of Rs.850 to Swiggy was successful. Ref: 402938471.",
     "Dear Customer, your net banking password will expire in 30 days. Please renew it.",
-    "Your NACH mandate for ₹2,500/month has been registered successfully.",
-    "Your ITR for AY 2023-24 has been processed and a refund of ₹3,200 is initiated.",
+    "Your NACH mandate for Rs.2,500/month has been registered successfully.",
+    "Your ITR for AY 2023-24 has been processed and a refund of Rs.3,200 is initiated.",
     "You have successfully logged in to PhonePe from a new device.",
-    "Your home loan EMI of ₹22,400 has been auto-debited for April.",
-    "A cheque of ₹15,000 issued by you has been cleared.",
+    "Your home loan EMI of Rs.22,400 has been auto-debited for April.",
+    "A cheque of Rs.15,000 issued by you has been cleared.",
     "Your KYC documents have been verified. Your account is now fully active.",
-    "Congratulations! Your credit card limit has been increased to ₹3,00,000.",
-    "Your CRED coins balance is ₹1,420. Redeem them before 31st March.",
-    "Your Mutual Fund SIP of ₹5,000 in Axis Bluechip Fund has been processed.",
+    "Congratulations! Your credit card limit has been increased to Rs.3,00,000.",
+    "Your CRED coins balance is Rs.1,420. Redeem them before 31st March.",
+    "Your Mutual Fund SIP of Rs.5,000 in Axis Bluechip Fund has been processed.",
     "Your nominee details have been updated successfully.",
     "Your two-factor authentication has been enabled on your account.",
 ]
 
 
-# ---------------------------------------------------------------------------
-# 1. Data loading & preparation
-# ---------------------------------------------------------------------------
-
 def load_dataframe() -> pd.DataFrame:
-    """Combine scam CSV with safe examples into a single labelled DataFrame."""
     scam_df = pd.DataFrame()
 
     if DATA_PATH.exists():
@@ -110,16 +79,11 @@ def load_dataframe() -> pd.DataFrame:
         scam_df["label"] = 1
         logger.info("Loaded %d scam examples from %s.", len(scam_df), DATA_PATH)
     else:
-        logger.warning(
-            "%s not found – training with only placeholder scam examples. "
-            "Run data_generator.py first for best results.",
-            DATA_PATH,
-        )
-        # Minimal placeholder so training can still proceed
+        logger.warning("%s not found - training with only placeholder scam examples.", DATA_PATH)
         placeholder_scam = [
             "URGENT: Your account has been suspended. Click here to verify now.",
             "Dear Customer, share your OTP 748291 with our agent immediately.",
-            "Congratulations! You've won ₹5,000 UPI cashback. Claim at: bit.ly/claim",
+            "Congratulations! You've won Rs.5,000 UPI cashback. Claim at: bit.ly/claim",
         ]
         scam_df = pd.DataFrame({"text": placeholder_scam, "label": 1})
 
@@ -130,7 +94,6 @@ def load_dataframe() -> pd.DataFrame:
     df["text"] = df["text"].astype(str).str.strip()
     df = df[df["text"].str.len() > 0]
 
-    # Shuffle
     df = df.sample(frac=1, random_state=SEED).reset_index(drop=True)
     logger.info(
         "Dataset: %d total | %d scam | %d safe",
@@ -140,7 +103,6 @@ def load_dataframe() -> pd.DataFrame:
 
 
 def build_hf_dataset(df: pd.DataFrame, tokeniser) -> DatasetDict:
-    """Tokenise and split into train / eval HuggingFace Datasets."""
     train_df, eval_df = train_test_split(
         df, test_size=TEST_SIZE, stratify=df["label"], random_state=SEED
     )
@@ -161,12 +123,7 @@ def build_hf_dataset(df: pd.DataFrame, tokeniser) -> DatasetDict:
     return DatasetDict({"train": train_ds, "eval": eval_ds})
 
 
-# ---------------------------------------------------------------------------
-# 2. Metrics
-# ---------------------------------------------------------------------------
-
 def compute_metrics(eval_pred):
-    """Binary accuracy + precision/recall/F1 (no sklearn dependency)."""
     logits, labels = eval_pred
     preds = np.argmax(logits, axis=-1)
 
@@ -185,27 +142,17 @@ def compute_metrics(eval_pred):
     return {"accuracy": accuracy, "precision": precision, "recall": recall, "f1": f1}
 
 
-# ---------------------------------------------------------------------------
-# 3. Training
-# ---------------------------------------------------------------------------
-
 def train() -> None:
-    logger.info("=== PhishGuard LoRA Fine-Tuning ===")
+    logger.info("PhishGuard LoRA Fine-Tuning")
     logger.info("Base model : %s", BASE_MODEL)
     logger.info("Output dir : %s", OUTPUT_DIR.resolve())
 
-    # -- Tokeniser -----------------------------------------------------------
     tokeniser = AutoTokenizer.from_pretrained(BASE_MODEL)
 
-    # -- Data ----------------------------------------------------------------
     df = load_dataframe()
     dataset = build_hf_dataset(df, tokeniser)
-    logger.info(
-        "Train split: %d | Eval split: %d",
-        len(dataset["train"]), len(dataset["eval"]),
-    )
+    logger.info("Train split: %d | Eval split: %d", len(dataset["train"]), len(dataset["eval"]))
 
-    # -- Base model ----------------------------------------------------------
     base_model = AutoModelForSequenceClassification.from_pretrained(
         BASE_MODEL,
         num_labels=2,
@@ -213,7 +160,6 @@ def train() -> None:
         label2id={"SAFE": 0, "SCAM": 1},
     )
 
-    # -- LoRA config ---------------------------------------------------------
     lora_cfg = LoraConfig(
         task_type=TaskType.SEQ_CLS,
         r=LORA_R,
@@ -225,7 +171,6 @@ def train() -> None:
     model = get_peft_model(base_model, lora_cfg)
     model.print_trainable_parameters()
 
-    # -- TrainingArguments ---------------------------------------------------
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
     training_args = TrainingArguments(
@@ -242,11 +187,10 @@ def train() -> None:
         logging_dir=str(OUTPUT_DIR / "logs"),
         logging_steps=10,
         seed=SEED,
-        fp16=torch.cuda.is_available(),   # auto-enable mixed precision on GPU
-        report_to="none",                  # disable W&B / MLflow for local runs
+        fp16=torch.cuda.is_available(),
+        report_to="none",
     )
 
-    # -- Trainer -------------------------------------------------------------
     trainer = Trainer(
         model=model,
         args=training_args,
@@ -257,26 +201,19 @@ def train() -> None:
         compute_metrics=compute_metrics,
     )
 
-    logger.info("Starting training…")
+    logger.info("Starting training.")
     trainer.train()
 
-    # -- Save adapter --------------------------------------------------------
     model.save_pretrained(str(OUTPUT_DIR))
     tokeniser.save_pretrained(str(OUTPUT_DIR))
-    logger.info("LoRA adapter + tokeniser saved → %s", OUTPUT_DIR.resolve())
+    logger.info("LoRA adapter + tokeniser saved to %s", OUTPUT_DIR.resolve())
 
-    # Run eval one final time
     metrics = trainer.evaluate()
     logger.info("Final eval metrics: %s", metrics)
 
 
-# ---------------------------------------------------------------------------
-# 4. Smoke-test – reload adapter and run inference
-# ---------------------------------------------------------------------------
-
 def smoke_test() -> None:
-    """Load the saved LoRA adapter and classify two sample sentences."""
-    logger.info("\n--- Smoke Test ---")
+    logger.info("Smoke Test")
 
     if not OUTPUT_DIR.exists():
         logger.error("Model directory not found. Run train() first.")
@@ -305,9 +242,9 @@ def smoke_test() -> None:
         pred_id = int(logits.argmax(-1).item())
         confidence = float(torch.softmax(logits, dim=-1).max().item())
 
-        status = "✅" if pred_id == expected else "❌"
+        status = "PASS" if pred_id == expected else "FAIL"
         logger.info(
-            "%s Predicted: %-6s (%.1f%%) | Expected: %s | Text: %.60s…",
+            "%s | Predicted: %-6s (%.1f%%) | Expected: %s | Text: %.60s",
             status,
             id2label[pred_id],
             confidence * 100,
@@ -315,10 +252,6 @@ def smoke_test() -> None:
             text,
         )
 
-
-# ---------------------------------------------------------------------------
-# Entrypoint
-# ---------------------------------------------------------------------------
 
 if __name__ == "__main__":
     train()

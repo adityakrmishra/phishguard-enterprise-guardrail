@@ -1,12 +1,4 @@
-"""
-src/ml_pipeline/inference.py
------------------------------
-IntentClassifier – loads the fine-tuned DistilRoBERTa LoRA adapter
-and provides single-text inference for the FastAPI 'heavy brain' path.
-
-Usage (standalone):
-    python -m src.ml_pipeline.inference
-"""
+# DistilRoBERTa LoRA adapter loader and single-text phishing inference class.
 
 from __future__ import annotations
 
@@ -27,16 +19,6 @@ ID2LABEL     = {0: "SAFE", 1: "KNOWN_SCAM"}
 
 
 class IntentClassifier:
-    """
-    Wraps the fine-tuned LoRA adapter for single-text phishing classification.
-
-    Parameters
-    ----------
-    adapter_dir : Path
-        Directory containing the saved PEFT adapter weights and tokeniser.
-        Falls back to BASE_MODEL weights only if the adapter is not found.
-    """
-
     def __init__(self, adapter_dir: Path = ADAPTER_DIR) -> None:
         self._device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         logger.info("IntentClassifier device: %s", self._device)
@@ -65,20 +47,6 @@ class IntentClassifier:
         logger.info("IntentClassifier ready.")
 
     def predict(self, text: str) -> Tuple[str, float]:
-        """
-        Classify a single text string.
-
-        Parameters
-        ----------
-        text : str
-            The input message or URL to classify.
-
-        Returns
-        -------
-        (verdict, confidence)
-            verdict    : "SAFE" or "KNOWN_SCAM"
-            confidence : softmax probability of the predicted class [0.0 – 1.0]
-        """
         inputs = self._tokeniser(
             text,
             return_tensors="pt",
@@ -89,9 +57,9 @@ class IntentClassifier:
         inputs = {k: v.to(self._device) for k, v in inputs.items()}
 
         with torch.no_grad():
-            logits = self._model(**inputs).logits          # shape: (1, 2)
+            logits = self._model(**inputs).logits
 
-        probs      = torch.softmax(logits, dim=-1).squeeze()   # shape: (2,)
+        probs      = torch.softmax(logits, dim=-1).squeeze()
         pred_id    = int(probs.argmax().item())
         confidence = float(probs[pred_id].item())
         verdict    = ID2LABEL[pred_id]
@@ -103,9 +71,6 @@ class IntentClassifier:
         return verdict, confidence
 
 
-# ---------------------------------------------------------------------------
-# Smoke test – python -m src.ml_pipeline.inference
-# ---------------------------------------------------------------------------
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO, format="%(levelname)s | %(message)s")
 

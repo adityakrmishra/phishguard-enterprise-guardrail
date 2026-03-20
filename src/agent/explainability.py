@@ -1,17 +1,4 @@
-"""
-src/agent/explainability.py
-----------------------------
-LLM-powered audit log generator for flagged phishing content.
-
-generate_audit_log(text) calls an OpenAI-compatible API (Groq / Together AI /
-OpenAI) and returns a dict with:
-  - fraud_intent        : short label, e.g. "Authority Impersonation"
-  - compliance_reasoning: 1-sentence policy explanation
-
-The function is intentionally fast-path safe: if the LLM call fails for any
-reason it returns graceful fallback strings instead of raising, so the rest of
-the API response is never blocked.
-"""
+# LLM-powered audit log generator that returns fraud intent and compliance reasoning for flagged phishing messages.
 
 from __future__ import annotations
 
@@ -25,10 +12,8 @@ from openai import APIError, APIConnectionError, OpenAI, RateLimitError
 load_dotenv()
 logger = logging.getLogger(__name__)
 
-# ---------------------------------------------------------------------------
-# OpenAI-compatible client (works with Groq, Together AI, OpenAI)
-# ---------------------------------------------------------------------------
 _client: OpenAI | None = None
+
 
 def _get_client() -> OpenAI | None:
     global _client
@@ -36,18 +21,15 @@ def _get_client() -> OpenAI | None:
         return _client
     api_key = os.getenv("OPENAI_API_KEY")
     if not api_key:
-        logger.warning("OPENAI_API_KEY not set – audit log will use fallback values.")
+        logger.warning("OPENAI_API_KEY not set - audit log will use fallback values.")
         return None
     _client = OpenAI(
         api_key=api_key,
-        base_url=os.getenv("OPENAI_BASE_URL"),  # None → OpenAI default
+        base_url=os.getenv("OPENAI_BASE_URL"),
     )
     return _client
 
 
-# ---------------------------------------------------------------------------
-# Known fraud intent categories (helps the model stay consistent)
-# ---------------------------------------------------------------------------
 _INTENT_CATEGORIES = [
     "Authority Impersonation",
     "Forced Urgency",
@@ -63,7 +45,7 @@ _INTENT_CATEGORIES = [
 _SYSTEM_PROMPT = (
     "You are a compliance analyst at a financial-crime intelligence unit. "
     "Your job is to analyse flagged messages and produce a strict audit report. "
-    "You must respond ONLY with a valid JSON object — no markdown, no extra keys. "
+    "You must respond ONLY with a valid JSON object - no markdown, no extra keys. "
     "The JSON must have exactly two keys:\n"
     '  "fraud_intent": one label from this list: '
     + str(_INTENT_CATEGORIES) + "\n"
@@ -73,23 +55,9 @@ _SYSTEM_PROMPT = (
 
 
 def generate_audit_log(text: str) -> dict[str, str]:
-    """
-    Call the LLM to produce a structured audit report for a flagged message.
-
-    Parameters
-    ----------
-    text : str
-        The phishing message that was flagged as KNOWN_SCAM.
-
-    Returns
-    -------
-    dict with keys:
-        fraud_intent        : str  – short category label
-        compliance_reasoning: str  – 1-sentence policy explanation
-    """
     _fallback = {
         "fraud_intent": "Unknown",
-        "compliance_reasoning": "Automated audit unavailable – LLM service unreachable.",
+        "compliance_reasoning": "Automated audit unavailable - LLM service unreachable.",
     }
 
     client = _get_client()
@@ -109,12 +77,11 @@ def generate_audit_log(text: str) -> dict[str, str]:
                 {"role": "system", "content": _SYSTEM_PROMPT},
                 {"role": "user",   "content": user_prompt},
             ],
-            temperature=0.2,   # low temperature → consistent, factual output
+            temperature=0.2,
             max_tokens=200,
         )
         raw = response.choices[0].message.content.strip()
 
-        # Strip optional markdown fences
         if raw.startswith("```"):
             raw = raw.split("```")[1]
             if raw.startswith("json"):
@@ -122,7 +89,6 @@ def generate_audit_log(text: str) -> dict[str, str]:
 
         parsed = json.loads(raw)
 
-        # Validate expected keys are present
         fraud_intent = str(parsed.get("fraud_intent", "Unknown")).strip()
         reasoning    = str(parsed.get("compliance_reasoning", "")).strip()
 

@@ -1,8 +1,4 @@
-"""
-src/api/main.py
----------------
-FastAPI application entry point for PhishGuard Enterprise Guardrail.
-"""
+# FastAPI application entry point with CORS middleware and router registration.
 
 import logging
 
@@ -18,9 +14,6 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-# ---------------------------------------------------------------------------
-# App
-# ---------------------------------------------------------------------------
 app = FastAPI(
     title="PhishGuard Enterprise Guardrail API",
     description=(
@@ -32,7 +25,6 @@ app = FastAPI(
     redoc_url="/redoc",
 )
 
-# Allow the Streamlit frontend (port 8501) to call the API during development.
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["http://localhost:8501", "http://127.0.0.1:8501"],
@@ -40,15 +32,9 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# ---------------------------------------------------------------------------
-# Routers
-# ---------------------------------------------------------------------------
 app.include_router(routes.router)
 
 
-# ---------------------------------------------------------------------------
-# Health check
-# ---------------------------------------------------------------------------
 class HealthResponse(BaseModel):
     status: str
     message: str
@@ -56,13 +42,9 @@ class HealthResponse(BaseModel):
 
 @app.get("/", response_model=HealthResponse, tags=["Health"])
 async def health_check() -> HealthResponse:
-    """Liveness probe – confirms the API process is running."""
     return HealthResponse(status="ok", message="PhishGuard API is up and running.")
 
 
-# ---------------------------------------------------------------------------
-# Dev entrypoint:  python -m src.api.main
-# ---------------------------------------------------------------------------
 if __name__ == "__main__":
     import uvicorn
 

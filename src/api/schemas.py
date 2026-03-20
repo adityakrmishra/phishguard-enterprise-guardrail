@@ -1,8 +1,4 @@
-"""
-src/api/schemas.py
-------------------
-Pydantic v2 request/response models for the PhishGuard API.
-"""
+# Pydantic v2 request and response schema definitions for the PhishGuard analyze endpoint.
 
 from typing import Optional
 
@@ -10,8 +6,6 @@ from pydantic import BaseModel, Field
 
 
 class TransactionRequest(BaseModel):
-    """Payload sent by the client for phishing analysis."""
-
     text: str = Field(
         ...,
         min_length=1,
@@ -22,8 +16,6 @@ class TransactionRequest(BaseModel):
 
 
 class TransactionResponse(BaseModel):
-    """Result returned by the /api/v1/analyze endpoint."""
-
     verdict: str = Field(
         ...,
         description="One of: SAFE | KNOWN_SCAM | ANOMALY_NEEDS_LLM",
@@ -38,11 +30,9 @@ class TransactionResponse(BaseModel):
     )
     fraud_intent: Optional[str] = Field(
         default=None,
-        description="Short fraud category label (e.g. 'Authority Impersonation'). "
-                    "Populated only for KNOWN_SCAM verdicts.",
+        description="Short fraud category label. Populated only for KNOWN_SCAM verdicts.",
     )
     compliance_reasoning: Optional[str] = Field(
         default=None,
-        description="One-sentence compliance explanation for why the content was flagged. "
-                    "Populated only for KNOWN_SCAM verdicts.",
+        description="One-sentence compliance explanation. Populated only for KNOWN_SCAM verdicts.",
     )

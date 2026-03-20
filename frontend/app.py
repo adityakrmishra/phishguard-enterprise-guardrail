@@ -1,9 +1,4 @@
-"""
-frontend/app.py
----------------
-PhishGuard Enterprise Guardrail – Streamlit dashboard.
-Connects to the FastAPI backend at http://localhost:8000/api/v1/analyze.
-"""
+# Streamlit B2B compliance dashboard; sends text to the FastAPI analyze endpoint and displays verdict, metrics, and audit log.
 
 import time
 from datetime import datetime
@@ -11,9 +6,6 @@ from datetime import datetime
 import requests
 import streamlit as st
 
-# ---------------------------------------------------------------------------
-# Page config – must be the very first Streamlit call
-# ---------------------------------------------------------------------------
 st.set_page_config(
     page_title="PhishGuard Enterprise Guardrail",
     page_icon="🛡️",
@@ -21,16 +13,11 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 
-# ---------------------------------------------------------------------------
-# Custom CSS – B2B compliance look
-# ---------------------------------------------------------------------------
 st.markdown(
     """
     <style>
-        /* Base background */
         .stApp { background-color: #0d1117; }
 
-        /* Header strip */
         .pg-header {
             background: linear-gradient(90deg, #0f2027, #203a43, #2c5364);
             border-radius: 12px;
@@ -50,7 +37,6 @@ st.markdown(
             font-size: 0.88rem;
         }
 
-        /* Input area card */
         .input-card {
             background: #161b22;
             border: 1px solid #30363d;
@@ -59,7 +45,6 @@ st.markdown(
             margin-bottom: 1rem;
         }
 
-        /* Result card */
         .result-card {
             background: #161b22;
             border: 1px solid #30363d;
@@ -67,7 +52,6 @@ st.markdown(
             padding: 1.4rem 1.6rem;
         }
 
-        /* Sidebar */
         section[data-testid="stSidebar"] {
             background-color: #0d1117;
             border-right: 1px solid #21262d;
@@ -82,14 +66,11 @@ st.markdown(
         .badge-green  { background: #1a4731; color: #3fb950; }
         .badge-yellow { background: #3d2f0b; color: #e3b341; }
 
-        /* Override Streamlit metric label colour */
         [data-testid="stMetricLabel"] { color: #8b949e !important; }
         [data-testid="stMetricValue"] { color: #e6edf3 !important; }
 
-        /* Divider */
         hr { border-color: #21262d; }
 
-        /* Submit button */
         div.stButton > button {
             background: linear-gradient(135deg, #1f6feb, #388bfd);
             color: white;
@@ -105,19 +86,13 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
-API_URL = "http://localhost:8000/api/v1/analyze"
+API_URL = "https://piddling-chandler-decadently.ngrok-free.dev/api/v1/analyze"
 
-# ---------------------------------------------------------------------------
-# Session state for history
-# ---------------------------------------------------------------------------
 if "history" not in st.session_state:
-    st.session_state.history = []   # list of dicts
+    st.session_state.history = []
 
-# ---------------------------------------------------------------------------
-# Sidebar – System Health
-# ---------------------------------------------------------------------------
 with st.sidebar:
-    st.markdown("### 🛡️ PhishGuard")
+    st.markdown("### PhishGuard")
     st.markdown(
         '<span class="sidebar-badge badge-green">● SYSTEM ONLINE</span>',
         unsafe_allow_html=True,
@@ -140,9 +115,6 @@ with st.sidebar:
     st.caption(f"Last refresh: {datetime.now().strftime('%H:%M:%S')}")
     st.caption("PhishGuard v0.2.0 · Internal Demo")
 
-# ---------------------------------------------------------------------------
-# Header
-# ---------------------------------------------------------------------------
 st.markdown(
     """
     <div class="pg-header">
@@ -153,29 +125,23 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
-# ---------------------------------------------------------------------------
-# KPI row – aggregate session stats
-# ---------------------------------------------------------------------------
 total     = len(st.session_state.history)
 safe_n    = sum(1 for r in st.session_state.history if r["verdict"] == "SAFE")
 scam_n    = sum(1 for r in st.session_state.history if r["verdict"] == "KNOWN_SCAM")
 anomaly_n = sum(1 for r in st.session_state.history if r["verdict"] == "ANOMALY_NEEDS_LLM")
 
 k1, k2, k3, k4 = st.columns(4)
-k1.metric("Total Scanned",    total)
-k2.metric("✅ Safe",          safe_n)
-k3.metric("🚨 Known Scam",    scam_n)
-k4.metric("⚠️ Anomalies",    anomaly_n)
+k1.metric("Total Scanned", total)
+k2.metric("Safe", safe_n)
+k3.metric("Known Scam", scam_n)
+k4.metric("Anomalies", anomaly_n)
 
 st.markdown("---")
 
-# ---------------------------------------------------------------------------
-# Analysis form
-# ---------------------------------------------------------------------------
 left, right = st.columns([1.15, 1], gap="large")
 
 with left:
-    st.markdown("#### 📋 Submit Content for Analysis")
+    st.markdown("#### Submit Content for Analysis")
     with st.form("analyze_form", clear_on_submit=False):
         user_text = st.text_area(
             label="Paste URL, email body, or message content",
@@ -183,9 +149,8 @@ with left:
             height=160,
             label_visibility="collapsed",
         )
-        submitted = st.form_submit_button("🔍  Analyse Now", use_container_width=True)
+        submitted = st.form_submit_button("Analyse Now", use_container_width=True)
 
-    # Quick-test samples
     st.markdown("**Quick test samples:**")
     sample_cols = st.columns(3)
     if sample_cols[0].button("Safe sample", use_container_width=True):
@@ -198,14 +163,11 @@ with left:
         user_text = "The quarterly GDP figures indicate a potential 3.2% economic contraction."
         submitted = True
 
-# ---------------------------------------------------------------------------
-# Analysis – call backend
-# ---------------------------------------------------------------------------
 with right:
-    st.markdown("#### 🔎 Analysis Result")
+    st.markdown("#### Analysis Result")
 
     if submitted and user_text.strip():
-        with st.spinner("Routing through semantic triage…"):
+        with st.spinner("Routing through semantic triage..."):
             t0 = time.perf_counter()
             try:
                 resp = requests.post(
@@ -219,16 +181,14 @@ with right:
 
                 verdict              = data.get("verdict", "UNKNOWN")
                 distance             = data.get("distance", 0.0)
-                matched              = data.get("matched_template", "—")
+                matched              = data.get("matched_template", "-")
                 fraud_intent         = data.get("fraud_intent")
                 compliance_reasoning = data.get("compliance_reasoning")
 
-                # Record in history
                 st.session_state.history.append(
                     {"verdict": verdict, "distance": distance, "text": user_text[:80]}
                 )
 
-                # ---- Verdict banner ----------------------------------------
                 if verdict == "SAFE":
                     st.success("✅ **SAFE** — Content appears legitimate.")
                 elif verdict == "KNOWN_SCAM":
@@ -236,22 +196,19 @@ with right:
                 else:
                     st.warning("⚠️ **ANOMALY** — Content is unusual. Escalating to LLM review.")
 
-                # ---- Detail metrics ----------------------------------------
                 m1, m2 = st.columns(2)
-                m1.metric("Verdict",    verdict)
+                m1.metric("Verdict",     verdict)
                 m2.metric("L2 Distance", f"{distance:.4f}")
 
                 m3, m4 = st.columns(2)
                 m3.metric("Latency",    f"{latency_ms:.0f} ms")
                 m4.metric("Confidence", "High" if distance < 0.4 else "Medium" if distance < 0.75 else "Low")
 
-                # ---- Matched template ----------------------------------------
                 st.markdown("**Nearest indexed template:**")
                 st.info(f'"{matched}"')
 
-                # ---- Audit Log (KNOWN_SCAM only) ----------------------------
                 if verdict == "KNOWN_SCAM" and (fraud_intent or compliance_reasoning):
-                    with st.expander("📋 Audit Log", expanded=True):
+                    with st.expander("Audit Log", expanded=True):
                         st.markdown(
                             """
                             <div style="background:#161b22;border:1px solid #30363d;
@@ -259,7 +216,7 @@ with right:
                             """,
                             unsafe_allow_html=True,
                         )
-                        st.markdown("##### 🔍 Compliance Intelligence Report")
+                        st.markdown("##### Compliance Intelligence Report")
                         st.markdown("---")
 
                         col_a, col_b = st.columns([1, 2])
@@ -281,16 +238,16 @@ with right:
 
                         st.markdown("</div>", unsafe_allow_html=True)
                         st.caption(
-                            "⚖️ This report is generated for audit and compliance purposes only. "
+                            "This report is generated for audit and compliance purposes only. "
                             "Powered by PhishGuard AI · RBI / NPCI AML Guidelines."
                         )
 
             except requests.exceptions.ConnectionError:
-                st.error("❌ Cannot reach the FastAPI backend at `localhost:8000`. Is the server running?")
+                st.error("Cannot reach the FastAPI backend at `localhost:8000`. Is the server running?")
             except requests.exceptions.Timeout:
-                st.error("❌ Request timed out after 30 s.")
+                st.error("Request timed out after 30 s.")
             except requests.exceptions.HTTPError as exc:
-                st.error(f"❌ API error {exc.response.status_code}: {exc.response.text[:200]}")
+                st.error(f"API error {exc.response.status_code}: {exc.response.text[:200]}")
 
     elif submitted and not user_text.strip():
         st.warning("Please enter some text before submitting.")
@@ -304,24 +261,21 @@ with right:
             unsafe_allow_html=True,
         )
 
-# ---------------------------------------------------------------------------
-# Analysis history table
-# ---------------------------------------------------------------------------
 if st.session_state.history:
     st.markdown("---")
-    st.markdown("#### 📜 Session History")
+    st.markdown("#### Session History")
 
     ICONS = {"SAFE": "✅", "KNOWN_SCAM": "🚨", "ANOMALY_NEEDS_LLM": "⚠️"}
     rows = []
     for i, item in enumerate(reversed(st.session_state.history), 1):
         rows.append({
             "#": i,
-            "Verdict": f"{ICONS.get(item['verdict'], '❓')} {item['verdict']}",
+            "Verdict": f"{ICONS.get(item['verdict'], '?')} {item['verdict']}",
             "L2 Distance": f"{item['distance']:.4f}",
             "Input (truncated)": item["text"],
         })
     st.dataframe(rows, use_container_width=True, hide_index=True)
 
-    if st.button("🗑️  Clear history"):
+    if st.button("Clear history"):
         st.session_state.history = []
         st.rerun()

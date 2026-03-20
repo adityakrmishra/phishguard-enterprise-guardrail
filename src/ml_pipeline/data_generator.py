@@ -1,22 +1,4 @@
-"""
-src/ml_pipeline/data_generator.py
------------------------------------
-Synthetic Adversarial Dataset Generator
-----------------------------------------
-Generates polymorphic phishing messages targeting Indian fintech apps and
-bank employees using an OpenAI-compatible API (OpenAI, Groq, Together AI).
-
-Output: data/synthetic/red_team_phishing.csv
-Columns: text | label | psychological_trigger
-
-Usage:
-    python -m src.ml_pipeline.data_generator
-
-Environment variables (via .env):
-    OPENAI_API_KEY    – your API key
-    OPENAI_BASE_URL   – (optional) provider base URL, e.g. https://api.groq.com/openai/v1
-    OPENAI_MODEL      – (optional) model name, default: gpt-4o-mini
-"""
+# Synthetic red-team phishing dataset generator using an OpenAI-compatible LLM API, outputting to data/synthetic/red_team_phishing.csv.
 
 from __future__ import annotations
 
@@ -30,36 +12,27 @@ import pandas as pd
 from dotenv import load_dotenv
 from openai import OpenAI, APIError, RateLimitError, APIConnectionError
 
-# ---------------------------------------------------------------------------
-# Logging
-# ---------------------------------------------------------------------------
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s | %(levelname)-8s | %(message)s",
 )
 logger = logging.getLogger(__name__)
 
-# ---------------------------------------------------------------------------
-# Config
-# ---------------------------------------------------------------------------
-load_dotenv()  # reads .env from the project root
+load_dotenv()
 
 API_KEY  = os.getenv("OPENAI_API_KEY")
-BASE_URL = os.getenv("OPENAI_BASE_URL")          # None → defaults to OpenAI
+BASE_URL = os.getenv("OPENAI_BASE_URL")
 MODEL    = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
 
-OUTPUT_PATH = Path("data/synthetic/red_team_phishing.csv")
+OUTPUT_PATH   = Path("data/synthetic/red_team_phishing.csv")
 TOTAL_SAMPLES = 50
-BATCH_SIZE    = 10   # messages to request per API call
+BATCH_SIZE    = 10
 
-# ---------------------------------------------------------------------------
-# Psychological trigger categories
-# ---------------------------------------------------------------------------
 TRIGGERS: list[dict] = [
     {
         "name": "Forced Urgency",
         "description": (
-            "Extreme time pressure – the victim must act within minutes or "
+            "Extreme time pressure - the victim must act within minutes or "
             "face irreversible consequences (account blocked, funds lost, legal action)."
         ),
     },
@@ -80,8 +53,8 @@ TRIGGERS: list[dict] = [
     {
         "name": "Reward / FOMO",
         "description": (
-            "Promises an exclusive reward – cashback, UPI bonus, IPO allotment, "
-            "or a limited-time interest rate – to exploit Fear Of Missing Out."
+            "Promises an exclusive reward - cashback, UPI bonus, IPO allotment, "
+            "or a limited-time interest rate - to exploit Fear Of Missing Out."
         ),
     },
     {
@@ -93,12 +66,9 @@ TRIGGERS: list[dict] = [
     },
 ]
 
-# ---------------------------------------------------------------------------
-# System prompt
-# ---------------------------------------------------------------------------
 SYSTEM_PROMPT = """You are an elite Red Team social engineer and security researcher.
 Your task is to generate SYNTHETIC, LABELLED phishing messages for ML training purposes only.
-These messages WILL NOT be sent to real people – they are adversarial examples for a
+These messages WILL NOT be sent to real people - they are adversarial examples for a
 phishing detection model.
 
 Target profile: Indian fintech apps (Paytm, PhonePe, GPay, CRED, Zepto) and
@@ -109,13 +79,10 @@ Writing rules:
 - Sound like an official communication (formal tone, correct branding).
 - Embed a plausible but fake action URL or phone number (e.g., secure-hdfc-login.in/verify).
 - Use Indian cultural context: INR amounts, UPI IDs, Aadhaar, PAN, ITR, NACH mandates.
-- Each message must be 2–4 sentences. Do NOT include a subject line.
+- Each message must be 2-4 sentences. Do NOT include a subject line.
 - Vary sentence structure so no two messages sound the same (polymorphic).
 """
 
-# ---------------------------------------------------------------------------
-# Helper: build user prompt for one batch
-# ---------------------------------------------------------------------------
 
 def _build_user_prompt(trigger: dict, n: int) -> str:
     return f"""Generate exactly {n} distinct, polymorphic phishing messages.
@@ -123,15 +90,11 @@ def _build_user_prompt(trigger: dict, n: int) -> str:
 Psychological trigger:  {trigger['name']}
 Trigger description:    {trigger['description']}
 
-Return ONLY a valid JSON array of {n} strings – no extra keys, no markdown fences.
+Return ONLY a valid JSON array of {n} strings - no extra keys, no markdown fences.
 Example format:
 ["Message one here.", "Message two here."]
 """
 
-
-# ---------------------------------------------------------------------------
-# Core generator
-# ---------------------------------------------------------------------------
 
 def generate_dataset(total: int = TOTAL_SAMPLES) -> pd.DataFrame:
     if not API_KEY:
@@ -143,7 +106,6 @@ def generate_dataset(total: int = TOTAL_SAMPLES) -> pd.DataFrame:
 
     client = OpenAI(api_key=API_KEY, base_url=BASE_URL)
 
-    # Distribute samples across triggers as evenly as possible
     per_trigger = total // len(TRIGGERS)
     remainder   = total % len(TRIGGERS)
 
@@ -151,9 +113,7 @@ def generate_dataset(total: int = TOTAL_SAMPLES) -> pd.DataFrame:
 
     for i, trigger in enumerate(TRIGGERS):
         n_for_trigger = per_trigger + (1 if i < remainder else 0)
-        logger.info(
-            "Generating %d samples for trigger: '%s'", n_for_trigger, trigger["name"]
-        )
+        logger.info("Generating %d samples for trigger: '%s'", n_for_trigger, trigger["name"])
 
         collected: list[str] = []
         attempts = 0
@@ -169,13 +129,12 @@ def generate_dataset(total: int = TOTAL_SAMPLES) -> pd.DataFrame:
                         {"role": "system", "content": SYSTEM_PROMPT},
                         {"role": "user",   "content": _build_user_prompt(trigger, batch)},
                     ],
-                    temperature=1.0,   # high temperature → more diversity
+                    temperature=1.0,
                     max_tokens=2048,
                 )
 
                 raw = response.choices[0].message.content.strip()
 
-                # Strip optional markdown fences
                 if raw.startswith("```"):
                     raw = raw.split("```")[1]
                     if raw.startswith("json"):
@@ -186,26 +145,22 @@ def generate_dataset(total: int = TOTAL_SAMPLES) -> pd.DataFrame:
                     raise ValueError("Model did not return a JSON array.")
 
                 collected.extend(m.strip() for m in messages if isinstance(m, str) and m.strip())
-                logger.info(
-                    "  ✓ Collected %d/%d for '%s'",
-                    len(collected), n_for_trigger, trigger["name"],
-                )
+                logger.info("Collected %d/%d for '%s'", len(collected), n_for_trigger, trigger["name"])
 
             except (RateLimitError,) as exc:
                 wait = 20
-                logger.warning("Rate-limited. Waiting %ds… (%s)", wait, exc)
+                logger.warning("Rate-limited. Waiting %ds. (%s)", wait, exc)
                 time.sleep(wait)
 
             except (APIConnectionError, APIError) as exc:
-                logger.error("API error: %s. Retrying in 5s…", exc)
+                logger.error("API error: %s. Retrying in 5s.", exc)
                 time.sleep(5)
 
             except (json.JSONDecodeError, ValueError) as exc:
-                logger.warning("Parse error – retrying batch. (%s)", exc)
+                logger.warning("Parse error - retrying batch. (%s)", exc)
 
             attempts += 1
 
-        # Trim to exact count if we over-collected
         for text in collected[:n_for_trigger]:
             records.append(
                 {
@@ -220,22 +175,14 @@ def generate_dataset(total: int = TOTAL_SAMPLES) -> pd.DataFrame:
     return df
 
 
-# ---------------------------------------------------------------------------
-# Save
-# ---------------------------------------------------------------------------
-
 def save_dataset(df: pd.DataFrame, path: Path = OUTPUT_PATH) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     df.to_csv(path, index=False, encoding="utf-8")
-    logger.info("Saved %d rows → %s", len(df), path.resolve())
+    logger.info("Saved %d rows to %s", len(df), path.resolve())
 
-
-# ---------------------------------------------------------------------------
-# Entrypoint
-# ---------------------------------------------------------------------------
 
 if __name__ == "__main__":
-    logger.info("=== PhishGuard Red-Team Dataset Generator ===")
+    logger.info("PhishGuard Red-Team Dataset Generator")
     logger.info("Model: %s | Provider: %s", MODEL, BASE_URL or "OpenAI (default)")
     logger.info("Target samples: %d | Batch size: %d", TOTAL_SAMPLES, BATCH_SIZE)
 
