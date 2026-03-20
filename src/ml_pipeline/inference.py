@@ -12,7 +12,7 @@ from transformers import AutoModelForSequenceClassification, AutoTokenizer
 
 logger = logging.getLogger(__name__)
 
-ADAPTER_DIR  = Path("models/distilroberta-finetuned")
+ADAPTER_DIR  = Path("models/distilroberta-advanced")
 BASE_MODEL   = "distilroberta-base"
 MAX_LEN      = 128
 ID2LABEL     = {0: "SAFE", 1: "KNOWN_SCAM"}

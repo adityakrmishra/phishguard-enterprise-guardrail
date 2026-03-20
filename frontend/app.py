@@ -103,7 +103,7 @@ with st.sidebar:
     st.metric("API Latency", "12 ms", delta="-3 ms", delta_color="normal")
     st.metric("Uptime", "99.9 %", delta="0.1 %", delta_color="normal")
     st.metric("FAISS Index Size", "14 vectors")
-    st.metric("Model", "MiniLM-L6-v2")
+    st.metric("Model", "Advanced v2.0 (LoRA + 53k)")
     st.metric("Requests (session)", len(st.session_state.history))
 
     st.markdown("---")
