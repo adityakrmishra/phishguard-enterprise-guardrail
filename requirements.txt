@@ -9,3 +9,5 @@ faiss-cpu>=1.8.0
 sentence-transformers>=2.7.0
 openai>=1.30.0
 python-dotenv>=1.0.0
+scikit-learn>=1.4.0
+datasets>=2.19.0

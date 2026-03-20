@@ -4,6 +4,8 @@ src/api/schemas.py
 Pydantic v2 request/response models for the PhishGuard API.
 """
 
+from typing import Optional
+
 from pydantic import BaseModel, Field
 
 
@@ -33,4 +35,14 @@ class TransactionResponse(BaseModel):
     matched_template: str = Field(
         ...,
         description="The closest template found in the FAISS index.",
+    )
+    fraud_intent: Optional[str] = Field(
+        default=None,
+        description="Short fraud category label (e.g. 'Authority Impersonation'). "
+                    "Populated only for KNOWN_SCAM verdicts.",
+    )
+    compliance_reasoning: Optional[str] = Field(
+        default=None,
+        description="One-sentence compliance explanation for why the content was flagged. "
+                    "Populated only for KNOWN_SCAM verdicts.",
     )

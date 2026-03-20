@@ -217,9 +217,11 @@ with right:
                 resp.raise_for_status()
                 data = resp.json()
 
-                verdict  = data.get("verdict", "UNKNOWN")
-                distance = data.get("distance", 0.0)
-                matched  = data.get("matched_template", "—")
+                verdict              = data.get("verdict", "UNKNOWN")
+                distance             = data.get("distance", 0.0)
+                matched              = data.get("matched_template", "—")
+                fraud_intent         = data.get("fraud_intent")
+                compliance_reasoning = data.get("compliance_reasoning")
 
                 # Record in history
                 st.session_state.history.append(
@@ -246,6 +248,42 @@ with right:
                 # ---- Matched template ----------------------------------------
                 st.markdown("**Nearest indexed template:**")
                 st.info(f'"{matched}"')
+
+                # ---- Audit Log (KNOWN_SCAM only) ----------------------------
+                if verdict == "KNOWN_SCAM" and (fraud_intent or compliance_reasoning):
+                    with st.expander("📋 Audit Log", expanded=True):
+                        st.markdown(
+                            """
+                            <div style="background:#161b22;border:1px solid #30363d;
+                                        border-radius:8px;padding:1rem 1.2rem;">
+                            """,
+                            unsafe_allow_html=True,
+                        )
+                        st.markdown("##### 🔍 Compliance Intelligence Report")
+                        st.markdown("---")
+
+                        col_a, col_b = st.columns([1, 2])
+                        with col_a:
+                            st.markdown("**Fraud Intent**")
+                            st.markdown(
+                                f'<span style="background:#3d0b0b;color:#f85149;'
+                                f'padding:3px 10px;border-radius:20px;font-size:0.82rem;'
+                                f'font-weight:600;">{fraud_intent or "Unknown"}</span>',
+                                unsafe_allow_html=True,
+                            )
+                        with col_b:
+                            st.markdown("**Compliance Reasoning**")
+                            st.markdown(
+                                f'<span style="color:#c9d1d9;font-size:0.9rem;">'
+                                f'{compliance_reasoning or "Not available."}</span>',
+                                unsafe_allow_html=True,
+                            )
+
+                        st.markdown("</div>", unsafe_allow_html=True)
+                        st.caption(
+                            "⚖️ This report is generated for audit and compliance purposes only. "
+                            "Powered by PhishGuard AI · RBI / NPCI AML Guidelines."
+                        )
 
             except requests.exceptions.ConnectionError:
                 st.error("❌ Cannot reach the FastAPI backend at `localhost:8000`. Is the server running?")
