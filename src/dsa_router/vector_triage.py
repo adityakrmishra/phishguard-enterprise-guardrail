@@ -16,16 +16,6 @@ LABEL_SAFE = "SAFE"
 LABEL_KNOWN_SCAM = "KNOWN_SCAM"
 LABEL_ANOMALY = "ANOMALY_NEEDS_LLM"
 
-_SAFE_TEMPLATES: List[str] = [
-    "Your account statement for March 2024 is now available online.",
-    "Please log in to your banking portal to review your recent transactions.",
-    "Your scheduled payment of $250 to John Doe has been processed successfully.",
-    "We have updated our privacy policy. Please review the changes at your convenience.",
-    "Your password was changed successfully. If you did not make this change, contact support.",
-    "Your new debit card ending in 4321 has been dispatched and will arrive in 3-5 business days.",
-    "Monthly interest has been credited to your savings account.",
-]
-
 _SCAM_TEMPLATES: List[str] = [
     "URGENT: Your account has been suspended. Click here immediately to verify your details.",
     "Congratulations! You have been selected for a $5,000 wire transfer. Confirm your bank info now.",
@@ -60,7 +50,6 @@ class SemanticRouter:
 
         self._entries: List[_IndexEntry] = []
 
-        self.add_templates(_SAFE_TEMPLATES, LABEL_SAFE)
         self.add_templates(_SCAM_TEMPLATES, LABEL_KNOWN_SCAM)
         logger.info(
             "SemanticRouter ready. Index size: %d vectors (%d-dim).",
@@ -82,7 +71,6 @@ class SemanticRouter:
     def triage(
         self,
         text: str,
-        safe_threshold: float = 0.35,
         scam_threshold: float = 0.75,
     ) -> Tuple[str, float, str]:
         if self._index.ntotal == 0:
@@ -96,9 +84,11 @@ class SemanticRouter:
         nearest_idx: int = int(indices[0][0])
         nearest_entry = self._entries[nearest_idx]
 
-        if distance <= safe_threshold:
-            verdict = LABEL_SAFE
-        elif distance <= scam_threshold:
+        # Verdict is driven by the matched template's label and distance.
+        # The index contains ONLY scam templates, so a close match means
+        # KNOWN_SCAM; a distant match means the text is unlike any known
+        # scam and should be escalated to the LLM for deeper review.
+        if distance <= scam_threshold and nearest_entry.label == LABEL_KNOWN_SCAM:
             verdict = LABEL_KNOWN_SCAM
         else:
             verdict = LABEL_ANOMALY
